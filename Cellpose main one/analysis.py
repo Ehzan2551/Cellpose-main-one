@@ -15,12 +15,17 @@ files = ['111023 TA 23-83 laminin-555_0010_txred (1).jpg']
 imgs = [imread(f) for f in files]
 nimg = len(imgs)
 
-cellpose_output = model.eval(imgs, diameter=None, channels=[1,0])
-cellpose_output = cellpose_output[0]
+cellpose_masks, cellpose_flows, cellpose_styles, cellpose_diams = model.eval(
+    imgs, diameter=None, channels=[1, 0]
+)
+
+# ensure downstream processing always works with a list of label images
+if isinstance(cellpose_masks, np.ndarray):
+    cellpose_masks = [cellpose_masks]
 
 #Get rid of ROIs that are on the border/boundaries
-cellpose_output = [skimage.segmentation.clear_border(im) for im in cellpose_output]
-cellpose_output = [skimage.segmentation.relabel_sequential(im)[0] for im in cellpose_output]
+cellpose_masks = [skimage.segmentation.clear_border(im) for im in cellpose_masks]
+cellpose_masks = [skimage.segmentation.relabel_sequential(im)[0] for im in cellpose_masks]
 
 from scipy.spatial.distance import pdist
 from skimage.measure import find_contours
@@ -76,7 +81,7 @@ def compute_min_feret(label_img):
     return min_ferets
 
 
-for im in cellpose_output:
+for im in cellpose_masks:
     props = regionprops_table(label_image=im, properties=['feret_diameter_max'])
     min_ferets = compute_min_feret(im)
     props['feret_diameter_min'] = min_ferets
@@ -96,7 +101,7 @@ os.makedirs(output_dir, exist_ok=True)
 
 for i in range(nimg):
     image = imgs[i]
-    mask = cellpose_output[i]  # already processed, borders cleared
+    mask = cellpose_masks[i]  # already processed, borders cleared
     masked = np.ma.masked_where(mask == 0, mask)
 
     plt.figure(figsize=(8, 8))
